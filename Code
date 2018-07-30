@@ -1,0 +1,624 @@
+.ORIG x6000
+
+  ;; Clear all the general purpose registers
+  AND R0, R0, #0
+  AND R1, R1, #0
+  AND R2, R2, #0
+  AND R3, R3, #0
+  AND R4, R4, #0
+  AND R5, R5, #0
+  AND R6, R6, #0
+  AND R7, R7, #0
+
+  ;; Save Register 7
+  ST R7, ST_REG7
+
+  ;; Store register values
+  JSR PUSH
+  ;; Call function; setup ARGS in REGS if necessary:
+  ;; --------------------------------------------------------------
+  JSR MAIN
+  ;; --------------------------------------------------------------
+
+  ;; Restore register values
+  JSR POP
+
+  ;; Restore R7 from before calling functions
+  LD R7, ST_REG7
+
+  ;; R7 gets destroyed here
+  HALT
+
+MAIN:
+  ST R7, ST_REG7
+
+  ;; Ask for the user's name and print out a message
+  JSR PUSH
+  LD R0, USER_NAME_REQUEST
+  PUTSP
+  JSR POP
+
+  ;; Set up registers for getting the name
+  JSR PUSH
+  AND R2, R2, #0 ;; Clear R2
+  LEA R2, USER_NAME ;; Create the pointer for the array
+
+  ;; Get the user's name to use for a greeting
+  GETNAMELOOP:
+  GETC ;;get char from user
+  AND R4, R4, #0 ;; Clear R4
+  ;; Check the character is not a null terminator
+  ADD R4, R4, R0 ;; ADD R4, R4, R0 to check for null terminator
+  BRz NULLTERMINATE
+  STR R0, R2, #0 ;;store the character in R0 into the memory location in R2
+  ADD R2, R2, #1
+  BRnzp GETNAMELOOP
+
+  ;; Add a null terminator for the string in memory so we know when to stop printing the string
+  NULLTERMINATE:
+  STR R0, R2, #0
+  JSR POP
+
+  ;; Greet the user using their name
+  LD R0, USER_GREETING_STRING1
+  JSR PUSH
+  PUTSP
+  JSR POP
+
+  JSR PUSH
+  LEA R0, USER_NAME
+  PUTS
+  JSR POP
+
+  JSR PUSH
+  LD R0, USER_GREETING_STRING2
+  PUTSP
+  JSR POP
+
+  ;; Run one iteration of the program
+  START:
+  JSR PUSH
+  JSR PRINTMOOD
+  JSR POP
+
+  ;; Start looping here to repeat until the ending character is typed into the prompt
+  LOOP:
+  ;; Ask the user if they want to loop the program
+  LD R0, USER_MESSAGE_LOOP
+  LD R1, YES
+  NOT R1, R1
+  ADD R1, R1, #1
+  JSR PUSH
+  PUTSP
+  JSR POP
+
+  JSR PUSH
+  GETC
+  ADD R0, R1, R0 ;; Check if the user wants to loop again
+  ;; If they do not want to loop again, then you want to return
+  BRnp RETURN
+  JSR PUSH
+  JSR PRINTMOOD
+  JSR POP
+  BRnzp LOOP
+
+  RETURN:
+  ;; Say goodbye to the user
+  LD R0, USER_MESSAGE_GOODBYE
+  JSR PUSH
+  PUTSP
+  JSR POP
+  LD R7, ST_REG7
+  RET
+
+;; User messages for greeting and termination values
+USER_MESSAGE_GOODBYE: .FILL MESSAGE_GOODBYE
+USER_MESSAGE_LOOP: .FILL MESSAGE_LOOP
+USER_NAME_REQUEST: .FILL FIRST_GREETING
+USER_GREETING_STRING1: .FILL USER_GREETING_PART1
+USER_GREETING_STRING2: .FILL USER_GREETING_PART2
+YES: .FILL x79 ;; Variable to check if the user input a 'y' character to keep going
+
+;; Assumes that mood is in R0
+PRINTMOOD:
+  ;; Store R7
+  ST R7, ST_REG7_2
+
+  ;; Print out the user message
+  LD R0, USER_MESSAGE
+  PUTSP
+  GETC
+
+  LD R1, HAPPY
+  LD R2, SAD
+  LD R3, ANGRY
+  LD R4, FEAR
+  LD R5, ROMANTIC
+
+  ;; Get have negative of all answers to base choice off
+  NOT R1, R1
+  ADD R1, R1, #1
+  NOT R2, R2
+  ADD R2, R2, #1
+  NOT R3, R3
+  ADD R3, R3, #1
+  NOT R4, R4
+  ADD R4, R4, #1
+  NOT R5, R5
+  ADD R5, R5, #1
+
+  BRnzp CHECK_HAPPY
+
+  ;; Check if happy
+  CHECK_HAPPY:
+  ;; Mood is in R0, copy over to R6
+  AND R6, #0
+  ADD R6, R6, R0
+  ADD R6, R6, R1
+  BRnp CHECK_SAD
+  ;; Pick random quote
+  AND R2, #0 ;; Clear R2, since it is not needed anymore
+  JSR Random ;; Random number now in R2
+  AND R2, R2, #15 ;; And with 15 or 1111 to get the last four most significant bits
+  LEA R1, HAPPY_ARR ;; Gets the happy array's first pointer
+  ADD R1, R1, R2 ;; Add the offset from the random number
+  LDR R0, R1, #0 ;; Loading memory location R0 with quote's address
+  PUTSP
+  BRnzp END
+
+  ;; Check if sad
+  CHECK_SAD:
+  ;; Mood is in R0, copy over to R6
+  AND R6, #0
+  ADD R6, R6, R0
+  ADD R6, R6, R2
+  BRnp CHECK_ANGRY
+  ;; Pick random quote
+  AND R2, #0 ;; Clear R2, since it is not needed anymore
+  JSR Random ;; Random number now in R2
+  AND R2, R2, #15 ;; And with 15 or 1111 to get the last four most significant bits
+  LEA R1, SAD_ARR ;; Gets the happy array's first pointer
+  ADD R1, R1, R2 ;; Add the offset from the random number
+  LDR R0, R1, #0
+  PUTSP
+  BRnzp END
+
+  ;; Check if angry
+  CHECK_ANGRY:
+  ;; Mood is in R0, copy over to R6
+  AND R6, #0
+  ADD R6, R6, R0
+  ADD R6, R6, R3
+  BRnp CHECK_FEARFUL
+  ;;pick random quote
+  AND R2, #0 ;; Clear R2, since it is not needed anymore
+  JSR Random ;; Random number now in R2
+  AND R2, R2, #15 ;; And with 15 or 1111 to get the last four most significant bits
+  LEA R1, ANGRY_ARR ;; Gets the happy array's first pointer
+  ADD R1, R1, R2 ;; Add the offset from the random number
+  LDR R0, R1, #0
+  PUTSP
+  BRnzp END
+
+  ;; Check if fearful
+  CHECK_FEARFUL:
+  ;; Mood is in R0, copy over to R6
+  AND R6, #0
+  ADD R6, R6, R0
+  ADD R6, R6, R4
+  BRnp CHECK_ROMANTIC
+  ;;pick random quote
+  AND R2, #0 ;; Clear R2, since it is not needed anymore
+  JSR Random ;; Random number now in R2
+  AND R2, R2, #15 ;; And with 15 or 1111 to get the last four most significant bits
+  LEA R1, FEAR_ARR ;; Gets the happy array's first pointer
+  ADD R1, R1, R2 ;; Add the offset from the random number
+  LDR R0, R1, #0
+  PUTSP
+  BRnzp END
+
+  ;; Check if romantic
+  CHECK_ROMANTIC:
+  ;; Mood is in R0, copy over to R6
+  AND R6, #0
+  ADD R6, R6, R0
+  ADD R6, R6, R5
+  BRnp INVALID
+  ;; Pick random quote
+  AND R2, #0 ;; Clear R2, since it is not needed anymore
+  JSR Random ;; Random number now in R2
+  AND R2, R2, #15 ;; And with 15 or 1111 to get the last four most significant bits
+  LEA R1, ROMANTIC_ARR ;; Gets the happy array's first pointer
+  ADD R1, R1, R2 ;; Add the offset from the random number
+  LDR R0, R1, #0
+  PUTSP
+  BRnzp END
+
+  INVALID:
+  ;; Need message about invalid string
+  LD R0, USER_MESSAGE_INVALID
+  PUTSP
+
+  END:
+  LD R7, ST_REG7_2
+  RET
+
+;; Labels for identifying mood
+ST_REG7: .FILL x0
+ST_REG7_2: .FILL x0
+HAPPY: .FILL x68
+SAD: .FILL x73
+ANGRY: .FILL x61
+FEAR: .FILL x66
+ROMANTIC: .FILL x72
+USER_MESSAGE: .FILL MESSAGE
+USER_MESSAGE_INVALID: .FILL INVALID_MESSAGE
+USER_NAME: .BLKW #35 ;; Block off 35 spots in memory for the user's name
+
+;; Fill the arrays of quotes used
+HAPPY_ARR:
+.FILL HAPPY_Q1
+.FILL HAPPY_Q2
+.FILL HAPPY_Q3
+.FILL HAPPY_Q4
+.FILL HAPPY_Q5
+.FILL HAPPY_Q6
+.FILL HAPPY_Q7
+.FILL HAPPY_Q8
+.FILL HAPPY_Q9
+.FILL HAPPY_Q10
+.FILL HAPPY_Q11
+.FILL HAPPY_Q12
+.FILL HAPPY_Q13
+.FILL HAPPY_Q14
+.FILL HAPPY_Q15
+.FILL HAPPY_Q16
+
+SAD_ARR:
+.FILL SAD_Q1
+.FILL SAD_Q2
+.FILL SAD_Q3
+.FILL SAD_Q4
+.FILL SAD_Q5
+.FILL SAD_Q6
+.FILL SAD_Q7
+.FILL SAD_Q8
+.FILL SAD_Q9
+.FILL SAD_Q10
+.FILL SAD_Q11
+.FILL SAD_Q12
+.FILL SAD_Q13
+.FILL SAD_Q14
+.FILL SAD_Q15
+.FILL SAD_Q16
+
+ANGRY_ARR:
+.FILL ANGRY_Q1
+.FILL ANGRY_Q2
+.FILL ANGRY_Q3
+.FILL ANGRY_Q4
+.FILL ANGRY_Q5
+.FILL ANGRY_Q6
+.FILL ANGRY_Q7
+.FILL ANGRY_Q8
+.FILL ANGRY_Q9
+.FILL ANGRY_Q10
+.FILL ANGRY_Q11
+.FILL ANGRY_Q12
+.FILL ANGRY_Q13
+.FILL ANGRY_Q14
+.FILL ANGRY_Q15
+.FILL ANGRY_Q16
+
+FEAR_ARR:
+.FILL FEAR_Q1
+.FILL FEAR_Q2
+.FILL FEAR_Q3
+.FILL FEAR_Q4
+.FILL FEAR_Q5
+.FILL FEAR_Q6
+.FILL FEAR_Q7
+.FILL FEAR_Q8
+.FILL FEAR_Q9
+.FILL FEAR_Q10
+.FILL FEAR_Q11
+.FILL FEAR_Q12
+.FILL FEAR_Q13
+.FILL FEAR_Q14
+.FILL FEAR_Q15
+.FILL FEAR_Q16
+
+ROMANTIC_ARR:
+.FILL ROMANTIC_Q1
+.FILL ROMANTIC_Q2
+.FILL ROMANTIC_Q3
+.FILL ROMANTIC_Q4
+.FILL ROMANTIC_Q5
+.FILL ROMANTIC_Q6
+.FILL ROMANTIC_Q7
+.FILL ROMANTIC_Q8
+.FILL ROMANTIC_Q9
+.FILL ROMANTIC_Q10
+.FILL ROMANTIC_Q11
+.FILL ROMANTIC_Q12
+.FILL ROMANTIC_Q13
+.FILL ROMANTIC_Q14
+.FILL ROMANTIC_Q15
+.FILL ROMANTIC_Q16
+
+;; The Stack for the whole system
+TOP:    .FILL    STACK
+STACK:  .BLKW    #160
+
+;;; ----------------------------------------- Stack
+REG5: .FILL    #0
+REG6: .FILL    #0
+REG7: .FILL    #0
+PUSH:  ST R6, REG6     ;; save R5, R6 to MEMORY
+     ST R5, REG5     ;; R7 has return address
+                     ;; REG7 is in MEMORY already
+                     ;; R6 and R5 are destroyed
+     LD R6, TOP     ;; R6 is now TOP of stack
+     STR R0, R6, #0      ;; push R0 on stack
+     ADD R6, R6, #1  ;; incr
+     STR R1, R6, #0      ;; push R1 on stack
+     ADD R6, R6, #1  ;; incr
+     STR R2, R6, #0      ;; push R2 on stack
+     ADD R6, R6, #1  ;; incr
+     STR R3, R6, #0      ;; push R3 on stack
+     ADD R6, R6, #1  ;; incr
+     STR R4, R6, #0      ;; push R4 on stack
+     ADD R6, R6, #1  ;; incr
+     STR R5, R6, #0      ;; push R5 on stack
+     ADD R6, R6, #1  ;; incr
+     LD R5, REG6     ;; get R6 from MEMORY (destroys R5)
+     STR R5, R6, #0      ;; push R6 on stack
+     ADD R6, R6, #1  ;; incr
+     LD R5, REG7     ;; get R7 from MEMORY
+     STR R5, R6, #0  ;; push R7 on stack
+     ADD R6, R6, #1  ;; incr
+     ST R6, TOP      ;; save incremented TOP
+     LD R6, REG6
+     LD R5, REG5     ;;
+     RET
+
+POP:   LD R6, TOP     ;; R6 is TOP of stack
+     ADD R6, R6, #-1     ;; decr
+     LDR  R1, R6, #0      ;; load R7
+     ST  R1, REG7    ;; save to MEMORY
+     ADD R6, R6, #-1     ;; decr
+     LDR  R1, R6, #0      ;; load R6
+     ST  R1, REG6    ;; save to MEMORY
+     ADD R6, R6, #-1     ;; decr
+     LDR  R5, R6, #0      ;; load R5
+     ADD R6, R6, #-1     ;; decr
+     LDR  R4, R6, #0      ;; load R4
+     ADD R6, R6, #-1     ;; decr
+     LDR  R3, R6, #0      ;; load R3
+     ADD R6, R6, #-1     ;; decr
+     LDR  R2, R6, #0      ;; load R2
+     ADD R6, R6, #-1     ;; decr
+     LDR  R1, R6, #0      ;; load R1
+     ADD R6, R6, #-1     ;; decr
+     LDR  R0, R6, #0      ;; load R0
+     ST R6, TOP      ;; save decremented TOP
+     LD R6, REG6, #0     ;; put R6 back the way it was
+     RET
+
+;; Professor Blank's provided Random function
+;;; -----------------------------------------------------
+;;; Memory X has next random number
+Random: ST R7,BACK  ; save return location
+    LD R0, M
+    LD R1, A
+    JSR Divide          ; R0 / R1
+    ;; q = m / a
+    LD R0, QUOTIENT     ; R0 / R1
+    ST R0, Q
+    ;; r = m mod a
+    LD R0, REMAINDER    ; R0 mod R1
+    ST R0, R
+        ;; x / q
+    LD R0, X
+    LD R1, Q
+    JSR Divide          ; R0 / R1
+    LD R1, QUOTIENT
+    ST R1, TEMP2
+    LD R1, REMAINDER    ; x mod q
+    ST R1, TEMP1
+    ;;      a * TEMP1 - r * TEMP2
+    LD R0, A
+    JSR Multiply        ; R2 <- R0 * R1
+    ST R2, TEMP1
+    ;;      a * TEMP1 - r * TEMP2
+    LD R0, R
+    LD R1, TEMP2
+    JSR Multiply        ; R2 <- r * TEMP2
+    NOT R2,R2           ; -R2
+    ADD R2,R2,#1
+    ST R2, TEMP2
+    LD R1, TEMP1
+    ADD R2, R2, R1      ; TEMP1 - TEMP2
+TEST:  BRzp DONE        ; if x < 0 then
+    LD R1, M
+    ADD R2, R2, R1      ;
+DONE: ST R2, X
+    LD R7, BACK         ; Restore return address
+    RET
+A: .FILL #7             ;; a , the multiplicative constant is given
+M: .FILL #32767         ;; m = 2 Ë† 15 âˆ’ 1, the modulus is given
+X: .FILL #10            ;; x, the seed is given
+R: .FILL #0
+Q: .FILL #0
+TEMP1: .FILL #0
+TEMP2: .FILL #0
+BACK: .FILL #0
+REG7_BACK: .FILL #0
+
+;;; -----------------------------------------------------
+;;; R2 <- R0 * R1
+;;; Also uses R3 to store SIGN
+Multiply: AND R2,R2,#0
+  AND R3,R3,#0
+  ADD R0,R0,#0         ; compare R0
+  BRn MultNEG1
+  BR  MultCont
+MultNEG1: NOT R3,R3         ; flip SIGN
+  NOT R0,R0
+  ADD R0,R0,#1
+MultCONT: ADD R1,R1,#0         ; compare R1
+  BRn MultNEG2
+  BR MultInit
+MultNEG2: NOT R3,R3         ; flip SIGN
+  NOT R1,R1
+  ADD R1,R1,#1
+MultInit: ADD R0,R0,#0      ; have R0 set the condition codes
+MultLoop: BRz MultDone
+  ADD R2,R2,R1
+  ADD R0,R0,#-1
+  BR MultLoop
+MultDone: ADD R0,R3,#0
+  BRzp MultRet
+  NOT R2,R2
+  ADD R2,R2,#1
+MultRet:  RET            ; R2 has the sum
+
+;;; -----------------------------------------------------
+;;; R0 / R1
+;;; Also uses R3 to store SIGN
+;;;           R4 to store -R1
+;;;           R5 is QUOTIENT
+;;;           R6 is REMAINDER
+;;;           R2 temp
+Divide:   AND R3,R3,#0
+  ST R3, QUOTIENT
+  ST R3, REMAINDER
+  ADD R0,R0,#0         ; compare R0
+  BRn DivNEG1
+  BR  DivCont
+DivNEG1:  NOT R3,R3         ; flip SIGN
+  NOT R0,R0
+  ADD R0,R0,#1
+DivCONT:  ADD R1,R1,#0         ; compare R1
+  BRn DivNEG2
+  BR DivInit
+DivNEG2:  NOT R3,R3         ; flip SIGN
+  NOT R1,R1
+  ADD R1,R1,#1
+DivInit:  ADD R4,R1,#0
+  NOT R4,R4
+  ADD R4,R4,#1
+DivLoop:  ADD R2,R0,R4      ; have R2 set the condition codes
+  BRn DivDone
+  ADD R0,R0,R4
+  LD R2,QUOTIENT
+  ADD R2,R2,#1
+  ST R2,QUOTIENT
+  BR DivLoop
+DivDone:  ADD R3,R3,#0         ; Negative?
+  BRzp DivRet
+  LD R2,QUOTIENT     ; Yes, then negate R2
+  NOT R2,R2
+  ADD R2,R2,#1
+  ST R2,QUOTIENT
+DivRet:      ST R0,REMAINDER
+  RET            ; R2 has the sum
+QUOTIENT: .FILL #0
+REMAINDER: .FILL #0
+
+;; Strings used in the program
+MESSAGE: .STRINGC "Are you feeling Happy, Sad, Angry, Fearful, or Romantic? Please type 'h' 's' 'a' 'f' or 'r' depending on your mood.\n"
+INVALID_MESSAGE: .STRINGC "It doesn't take a therapist to know that avoiding your emotions isn't healthy. That emotion was not valid input. \n"
+
+MESSAGE_GOODBYE: .STRINGC "Hope I was of help - you can also try talking to a professional!\n"
+MESSAGE_LOOP: .STRINGC "Are you still feeling moody? Please type 'y' for yes or any other character for no.\n"
+FIRST_GREETING: .STRINGC "Hey there friend, what's your name? Please type in more than one character. "
+USER_GREETING_PART1: .STRINGC "Oh hi, "
+USER_GREETING_PART2: .STRINGC "! I am a random quote generator, and I am here to help you process your emotional baggage - the good and the bad - using the power of other people's words (not my own, because I am a machine). \n"
+
+;; Quotes as strings for the program
+HAPPY_Q1: .STRINGC "Happiness is not a goal it is a by-product. - Eleanor Roosevelt\n"
+HAPPY_Q2: .STRINGC "Joy is prayer, joy is strength, joy is love, joy is a net of love by which you can catch souls. - Mother Teresa\n"
+HAPPY_Q3: .STRINGC "Happiness lies in the joy of achievement and the thrill of creative effort. - Franklin D. Roosevelt\n"
+HAPPY_Q4: .STRINGC "Happiness can exist only in acceptance. - George Orwell\n"
+HAPPY_Q5: .STRINGC "Happiness depends upon ourselves. - Aristotle\n"
+HAPPY_Q6: .STRINGC "If you want to be happy, be. - Leo Tolstoy\n"
+HAPPY_Q7: .STRINGC "It is the ultimate luxury to combine passion and contribution. It's also a very clear path to happiness. - Sheryl Sandberg\n"
+HAPPY_Q8: .STRINGC "But what is happiness except the simple harmony between a man and the life he leads? - Albert Camus\n"
+HAPPY_Q9: .STRINGC "Happiness makes up in height for what it lacks in length. - Robert Frost\n"
+HAPPY_Q10: .STRINGC "No one has a right to consume happiness without producing it. - Helen Keller\n"
+HAPPY_Q11: .STRINGC "Happiness is when what you think, what you say, and what you do are in harmony. - Mahatma Gandhi\n"
+HAPPY_Q12: .STRINGC "The most important thing is to enjoy your life \- to be happy \- it's all that matters. - Audrey Hepburn\n"
+HAPPY_Q13: .STRINGC "I've got nothing to do today but smile. - Paul Simon\n"
+HAPPY_Q14: .STRINGC "Success is getting what you want, happiness is wanting what you get. - W.P. Kinsella\n"
+HAPPY_Q15: .STRINGC "Learn to value yourself, which means: fight for your happiness. - Ayn Rand\n"
+HAPPY_Q16: .STRINGC "All happiness depends on courage and work. - Honoré de Balzac\n"
+
+SAD_Q1: .STRINGC "The word 'happy' would lose its meaning if it were not balanced by sadness. - Carl Jung\n"
+SAD_Q2: .STRINGC "Tears come from the heart and not from the brain. - Leonardo da Vinci\n"
+SAD_Q3: .STRINGC "A sad soul can kill quicker than a germ. - John Steinbeck\n"
+SAD_Q4: .STRINGC "Experiencing sadness and anger can make you feel more creative, and by being creative, you can get beyond your pain or negativity. - Yoko Ono\n"
+SAD_Q5: .STRINGC "There is no sadder sight than a young pessimist. - Mark Twain\n"
+SAD_Q6: .STRINGC "And in real life endings aren't always neat, whether they're happy endings, or whether they're sad endings. - Stephen King\n"
+SAD_Q7: .STRINGC "He who is not just is severe, he who is not wise is sad. - Voltaire\n"
+SAD_Q8: .STRINGC "The keenest sorrow is to recognize ourselves as the sole cause of all our adversities. - Sophocles\n"
+SAD_Q9: .STRINGC "Proud people breed sad sorrows for themselves. - Emily Bronte\n"
+SAD_Q10: .STRINGC "The good times of today, are the sad thoughts of tomorrow. - Bob Marley\n"
+SAD_Q11: .STRINGC "Don't cry because it's over, smile because it happened. - Dr. Seuss\n"
+SAD_Q12: .STRINGC "Cry. Forgive. Learn. Move on. Let your tears water the seeds of your future happiness. - Steve Maraboli\n"
+SAD_Q13: .STRINGC "You cannot protect yourself from sadness without protecting yourself from happiness. - Jonathan Safran Foer\n"
+SAD_Q14: .STRINGC "Any fool can be happy. It takes a man with real heart to make beauty out of the stuff that makes us weep. - Clive Barker, Days of Magic, Nights of War\n"
+SAD_Q15: .STRINGC "Tears shed for another person are not a sign of weakness. They are a sign of a pure heart. - José N. Harris, MI VIDA: A Story of Faith, Hope and Love\n"
+SAD_Q16: .STRINGC "Tears are words that need to be written. - Paulo Coelho\n"
+
+ANGRY_Q1: .STRINGC "For every minute you remain angry, you give up sixty seconds of peace of mind. - Ralph Waldo Emerson\n"
+ANGRY_Q2: .STRINGC "Anger and intolerance are the enemies of correct understanding. - Mahatma Gandhi\n"
+ANGRY_Q3: .STRINGC "When angry, count to four, when very angry, swear. - Mark Twain\n"
+ANGRY_Q4: .STRINGC "Revenge and retaliation always perpetuate the cycle of anger, fear and violence. - Coretta Scott King\n"
+ANGRY_Q5: .STRINGC "A man that does not know how to be angry does not know how to be good. - Henry Ward Beecher\n"
+ANGRY_Q6: .STRINGC "When I am angry I can pray well and preach well. - Martin Luther\n"
+ANGRY_Q7: .STRINGC "Extremism thrives amid ignorance and anger, intimidation and cowardice. - Hillary Clinton\n"
+ANGRY_Q8: .STRINGC "I get angry about things, then go on and work. - Toni Morrison\n"
+ANGRY_Q9: .STRINGC "Anger makes dull men witty, but it keeps them poor. - Francis Bacon\n"
+ANGRY_Q10: .STRINGC "Genuine forgiveness does not deny anger but faces it head-on. - Alice Miller\n"
+ANGRY_Q11: .STRINGC "Laughter is much better than anger. - Wayne Gerard Trotman\n"
+ANGRY_Q12: .STRINGC "Never go to bed mad. Stay up and fight. - Phyllis Diller\n"
+ANGRY_Q13: .STRINGC "The truth will set you free, but first it will piss you off. - Joe Klaas, Twelve Steps to Happiness\n"
+ANGRY_Q14: .STRINGC "The best fighter is never angry. - Lao Tzu\n"
+ANGRY_Q15: .STRINGC "Bitterness is like cancer. It eats upon the host. But anger is like fire. It burns it all clean. - Maya Angelou\n"
+ANGRY_Q16: .STRINGC "Anybody can become angry — that is easy, but to be angry with the right person and to the right degree and at the right time and for the right purpose, and in the right way — that is not within everybody's power and is not easy. - Aristotle\n"
+
+FEAR_Q1: .STRINGC "Nothing in life is to be feared, it is only to be understood. Now is the time to understand more, so that we may fear less. - Marie Curie\n"
+FEAR_Q2: .STRINGC "I have a wish. It as a fear as well - that in my end will be my beginning. - Che Guevara\n"
+FEAR_Q3: .STRINGC "I don't have no fear of death. My only fear is coming back reincarnated. - Tupac Shakur\n"
+FEAR_Q4: .STRINGC "Courage is knowing what not to fear. - Plato\n"
+FEAR_Q5: .STRINGC "If you know the enemy and know yourself you need not fear the results of a hundred battles. - Sun Tzu\n"
+FEAR_Q6: .STRINGC "Courageous people do not fear forgiving, for the sake of peace. - Nelson Mandela\n"
+FEAR_Q7: .STRINGC "Have no fear of perfection - you'll never reach it. - Salvador Dali\n"
+FEAR_Q8: .STRINGC "I'm not afraid of storms, for I'm learning how to sail my ship. - Louisa May Alcott\n"
+FEAR_Q9: .STRINGC "Do not fear mistakes. You will know failure. Continue to reach out. - Benjamin Franklin\n"
+FEAR_Q10: .STRINGC "Fear is stupid. So are regrets. - Marilyn Monroe\n"
+FEAR_Q11: .STRINGC "Do one thing every day that scares you. - Eleanor Roosevelt\n"
+FEAR_Q12: .STRINGC "There is only one thing that makes a dream impossible to achieve: the fear of failure. - Paulo Coelho, The Alchemist\n"
+FEAR_Q13: .STRINGC "Have no fear of perfection - you'll never reach it. - Salvador Dalí\n"
+FEAR_Q14: .STRINGC "Scared is what you're feeling. Brave is what you're doing. - Emma Donoghue, Room\n"
+FEAR_Q15: .STRINGC "I learned that courage was not the absence of fear, but the triumph over it. The brave man is not he who does not feel afraid, but he who conquers that fear. - Nelson Mandela\n"
+FEAR_Q16: .STRINGC "The only thing we have to fear is fear itself. - Franklin D. Roosevelt, Franklin Delano Roosevelt's First Inaugural Address\n"
+
+ROMANTIC_Q1: .STRINGC "I love you the more in that I believe you had liked me for my own sake and for nothing else. - John Keats\n"
+ROMANTIC_Q2: .STRINGC "There is no charm equal to tenderness of heart. - Jane Austen\n"
+ROMANTIC_Q3: .STRINGC "I love you as certain dark things are to be loved, in secret, between the shadow and the soul. - Pablo Neruda\n"
+ROMANTIC_Q4: .STRINGC "If we lose love and self respect for each other, this is how we finally die. - Maya Angelou\n"
+ROMANTIC_Q5: .STRINGC "The best thing to hold onto in life is each other. - Audrey Hepburn\n"
+ROMANTIC_Q6: .STRINGC "Unable are the loved to die, for love is immortality. - Emily Dickinson\n"
+ROMANTIC_Q7: .STRINGC "The course of true love never did run smooth. - William Shakespeare\n"
+ROMANTIC_Q8: .STRINGC "I love you more than my own skin. - Frida Kahlo\n"
+ROMANTIC_Q9: .STRINGC "Love is the flower you've got to let grow. - John Lennon\n"
+ROMANTIC_Q10: .STRINGC "This is love: to fly toward a secret sky, to cause a hundred veils to fall each moment. First to let go of life. Finally, to take a step without feet. - Rumi\n"
+ROMANTIC_Q11: .STRINGC "\"There is no pretending,\" Jace said with absolute clarity. \"I love you, and I will love you until I die, and if there is life after that, I'll love you then.\" - Cassandra Clare, City of Glass\n"
+ROMANTIC_Q12: .STRINGC "Some women choose to follow men, and some women choose to follow their dreams. If you're wondering which way to go, remember that your career will never wake up and tell you that it doesn't love you anymore. - Lady Gaga\n"
+ROMANTIC_Q13: .STRINGC "The very essence of romance is uncertainty. - Oscar Wilde, The Importance of Being Earnest and Other Plays\n"
+ROMANTIC_Q14: .STRINGC "When love is not madness it is not love. - Pedro Calderón de la Barca\n"
+ROMANTIC_Q15: .STRINGC "Every great love starts with a great story... - Nicholas Sparks, The Notebook\n"
+ROMANTIC_Q16: .STRINGC "Romance is the glamour which turns the dust of everyday life into a golden haze. - Elinor Glyn\n"
+.END
